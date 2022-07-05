@@ -42,7 +42,7 @@ private:
     string pattern;
   };
 
-  auto bitLength(string& text) const -> uint;
+  auto bitLength(string& text) -> uint;
   auto writeBits(uint64_t data, uint bits) -> void;
   auto parseTable(const string& text) -> bool;
   auto parseDirective(string& line) -> void;

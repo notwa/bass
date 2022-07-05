@@ -24,16 +24,20 @@ auto Table::assemble(const string& statement) -> bool {
 
     bool mismatch = false;
     for(auto& format : opcode.format) {
-      if(format.type == Format::Type::Absolute) {
-        if(format.match != Format::Match::Weak) {
-          uint bits = bitLength(args[format.argument]);
-          if(format.match == Format::Match::Strong && bits > opcode.number[format.argument].bits) {
-            if(bits != opcode.number[format.argument].bits) {
-              if(format.match == Format::Match::Exact || bits != 0) {
-                mismatch = true;
-                break;
-              }
-            }
+      if(format.match == Format::Match::Weak) {
+        // Do nothing
+      } else if(format.type == Format::Type::Absolute) {
+        uint bits = bitLength(args[format.argument]);
+        //printf("%s: %u\n", args[format.argument], bits);
+        if(format.match == Format::Match::Strong) {
+          if(bits > opcode.number[format.argument].bits) {
+            mismatch = true;
+            break;
+          }
+        } else if(format.match == Format::Match::Exact) {
+          if(bits != opcode.number[format.argument].bits) {
+            mismatch = true;
+            break;
           }
         }
       }
@@ -155,7 +159,7 @@ auto Table::assemble(const string& statement) -> bool {
   return false;
 }
 
-auto Table::bitLength(string& text) const -> uint {
+auto Table::bitLength(string& text) -> uint {
   auto binLength = [&](const char* p) -> uint {
     uint length = 0;
     while(*p) {
@@ -176,21 +180,77 @@ auto Table::bitLength(string& text) const -> uint {
     return length;
   };
 
+  auto decLength = [&](const char *p) -> uint {
+    // returns 0 when the input is not a non-negative integer.
+    // returns 1 when the input is "0".
+    // returns 65 when the input would require more than 64 bits.
+    // otherwise, returns the minimum number of bits required
+    //            to store an integer, given its decimal encoding.
+
+    struct Meta {
+        short offset;
+        char elements;
+        char bits;
+    };
+
+    static const Meta metas[20] = {
+        {0,   3, 3},  {3,   3, 6},  {9,   3, 9},  {18,  4, 13},
+        {34,  3, 16}, {49,  3, 19}, {67,  4, 23}, {95,  3, 26},
+        {119, 3, 29}, {146, 4, 33}, {186, 3, 36}, {219, 3, 39},
+        {255, 4, 43}, {307, 3, 46}, {349, 3, 49}, {394, 4, 53},
+        {458, 3, 56}, {509, 3, 59}, {563, 4, 63}, {639, 1, 64}
+    };
+
+    static const char powers[] =
+        "842643216512256128819240962048102465536327681638452428826214413107"
+        "283886084194304209715210485766710886433554432167772165368709122684"
+        "354561342177288589934592429496729621474836481073741824687194767363"
+        "435973836817179869184549755813888274877906944137438953472879609302"
+        "220843980465111042199023255552109951162777670368744177664351843720"
+        "888321759218604441656294995342131228147497671065614073748835532890"
+        "071992547409924503599627370496225179981368524811258999068426247205"
+        "759403792793636028797018963968180143985094819845764607523034234882"
+        "882303761517117441441151880758558729223372036854775808461168601842"
+        "73879042305843009213693952115292150460684697618446744073709551616";
+
+    int i;
+
+    for (i = 0; ; i++) {
+        char c = p[i];
+        if (c == '\0') break;
+        if (c < '0' || c > '9') return 0;
+    }
+    if (i == 0) return 0;
+    if (i >= 21) return 65;
+
+    const int length = i;
+    const Meta meta = metas[length - 1];
+    const char *start = powers + meta.offset;
+
+    for (i = 0; i < meta.elements; i++) {
+        if (strncmp(p, start, length) >= 0) break;
+        start += length;
+    }
+    return meta.bits - i + 1;
+  };
+
   char* p = text.get();
   if(*p == '<') { *p = ' '; return  8; }
   if(*p == '>') { *p = ' '; return 16; }
   if(*p == '^') { *p = ' '; return 24; }
   if(*p == '?') { *p = ' '; return 32; }
   if(*p == ':') { *p = ' '; return 64; }
-  if(*p == '%') return binLength(p + 1);
-  if(*p == '$') return hexLength(p + 1);
-  if(*p == '0' && *(p + 1) == 'b') return binLength(p + 2);
-  if(*p == '0' && *(p + 1) == 'x') return hexLength(p + 2);
-  if(*p >= '0' && *p <= '9') return floor(log2(atoi(p))) + 1;
-  if(*p == '-') return 64;
-  if(auto constant = self.findConstant(p)) return (constant().value >= 0) ? floor(log2(constant().value)) + 1 : 64;
-  if(auto variable = self.findVariable(p)) return (variable().value >= 0) ? floor(log2(variable().value)) + 1 : 64;
-  return 0;
+
+  uint length = 0;
+  if(*p == '%') length = binLength(p + 1);
+  if(*p == '$') length = hexLength(p + 1);
+  if(*p == '0' && *(p + 1) == 'b') length = binLength(p + 2);
+  if(*p == '0' && *(p + 1) == 'x') length = hexLength(p + 2);
+  if(*p >= '0' && *p <= '9') length = decLength(p);
+  if(length) return length;
+
+  auto data = evaluate(text);
+  return data >= 0 ? floor(log2(data)) + 1 : 64;
 }
 
 auto Table::writeBits(uint64_t data, uint length) -> void {
@@ -206,7 +266,7 @@ auto Table::writeBits(uint64_t data, uint length) -> void {
     write(bitval);
     bitval >>= 8;
     bitpos -= 8;
-  }  
+  }
 }
 
 auto Table::parseTable(const string& text) -> bool {
@@ -245,7 +305,7 @@ auto Table::parseTable(const string& text) -> bool {
 auto Table::parseDirective(string& line) -> void {
   auto work = line.strip();
   work.trimLeft("#directive ", 1L);
-  
+
   auto items = work.split(" ");
   if(items.size() != 2) {
     error("Wrong syntax: '",line , "'\n");
@@ -253,16 +313,16 @@ auto Table::parseDirective(string& line) -> void {
 
   auto& key = items[0];
   key.append(" ");
-  
+
   uint value = atoi(items[1]);
-  
+
   for(auto& d : directives().EmitBytes) {
     if(key.equals(d.token)) {
       d.dataLength = value;
       return;
     }
   }
-  
+
   directives().add(key, value);
 }
 
