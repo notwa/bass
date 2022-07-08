@@ -42,7 +42,12 @@ private:
     string pattern;
   };
 
-  auto bitLength(string& text) -> uint;
+  struct CachedValue {
+    int64_t value = 0;
+    bool exists = false;
+  };
+
+  auto bitLength(string& text, int64_t value) const -> uint;
   auto writeBits(uint64_t data, uint bits) -> void;
   auto parseTable(const string& text) -> bool;
   auto parseDirective(string& line) -> void;
@@ -52,4 +57,6 @@ private:
 
   vector<Opcode> table;
   uint64_t bitval, bitpos;
+
+  vector<CachedValue> cache;
 };

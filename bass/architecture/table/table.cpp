@@ -15,6 +15,8 @@ auto Table::assemble(const string& statement) -> bool {
 
   uint pc = Architecture::pc();
 
+  cache.resize(0);
+
   for(auto& opcode : table) {
     if(!tokenize(s, opcode.pattern)) continue;
 
@@ -24,17 +26,27 @@ auto Table::assemble(const string& statement) -> bool {
 
     bool mismatch = false;
     for(auto& format : opcode.format) {
+      uint index = format.argument;
+
+      if(format.type != Format::Type::Static && !cache(index).exists) {
+        string arg = args[index];
+        char c = arg[0];
+        if(c == '<' || c == '>' || c == '^' || c == '?' || c == ':') arg = arg.slice(1);
+        int64_t value = evaluate(arg);
+        cache[index] = {value, true}; // Allocated by the conditional
+      }
+
       if(format.match == Format::Match::Weak) {
-        // Do nothing
+        // Weak matches never miss
       } else if(format.type == Format::Type::Absolute) {
-        uint bits = bitLength(args[format.argument]);
+        uint bits = bitLength(args[index], cache[index].value);
         if(format.match == Format::Match::Strong) {
-          if(bits > opcode.number[format.argument].bits) {
+          if(bits > opcode.number[index].bits) {
             mismatch = true;
             break;
           }
         } else if(format.match == Format::Match::Exact) {
-          if(bits != opcode.number[format.argument].bits) {
+          if(bits != opcode.number[index].bits) {
             mismatch = true;
             break;
           }
@@ -51,13 +63,13 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::Absolute: {
-          uint data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Relative: {
-          int data = evaluate(args[format.argument]) - (pc + format.displacement);
+          int64_t data = cache[format.argument].value - (pc + format.displacement);
           uint bits = opcode.number[format.argument].bits;
           int min = -(1 << (bits - 1)), max = +(1 << (bits - 1)) - 1;
           if(data < min || data > max) {
@@ -68,7 +80,7 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::Repeat: {
-          uint data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           for(uint n : range(data)) {
             writeBits(format.data, opcode.number[format.argument].bits);
           }
@@ -76,19 +88,19 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::ShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::ShiftLeft: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(data << format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::RelativeShiftRight: {
-          int data = evaluate(args[format.argument]) - (pc + format.displacement);
+          int64_t data = cache[format.argument].value - (pc + format.displacement);
           unsigned bits = opcode.number[format.argument].bits;
           int min = -(1 << (bits - 1)), max = +(1 << (bits - 1)) - 1;
           if(data < min || data > max) error("branch out of bounds");
@@ -103,49 +115,49 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::Negative: {
-          unsigned data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(-data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::NegativeShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(-data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Compliment: {
-          unsigned data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(~data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::ComplimentShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(~data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Decrement: {
-          unsigned data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(--data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::DecrementShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(--data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Increment: {
-          unsigned data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(++data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::IncrementShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = cache[format.argument].value;
           writeBits(++data >> format.data, opcode.number[format.argument].bits);
           break;
         }
@@ -158,7 +170,7 @@ auto Table::assemble(const string& statement) -> bool {
   return false;
 }
 
-auto Table::bitLength(string& text) -> uint {
+auto Table::bitLength(string& text, int64_t value) const -> uint {
   auto binLength = [&](const char* p) -> uint {
     uint length = 0;
     while(*p) {
@@ -179,7 +191,7 @@ auto Table::bitLength(string& text) -> uint {
     return length;
   };
 
-  auto decLength = [&](const char *p) -> uint {
+  auto decLength = [&](const char* p) -> uint {
     // returns 0 when the input is not a non-negative integer.
     // returns 1 when the input is "0".
     // returns 65 when the input would require more than 64 bits.
@@ -248,8 +260,7 @@ auto Table::bitLength(string& text) -> uint {
   if(*p >= '0' && *p <= '9') length = decLength(p);
   if(length) return length;
 
-  auto data = evaluate(text);
-  return data >= 0 ? floor(log2(data)) + 1 : 64;
+  return value >= 0 ? floor(log2(value)) + 1 : 64;
 }
 
 auto Table::writeBits(uint64_t data, uint length) -> void {
