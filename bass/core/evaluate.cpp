@@ -8,7 +8,7 @@ auto Bass::evaluate(const string& expression, uint mode) -> int64_t {
     if(auto constant = knownConstant({name()}, mode)) return constant().value;
     if(!queryPhase()) error("relative label not declared");
     if(mode & Evaluation::Known) unknowable++;
-    if(!unknowns.find(name())) unknowns.insert(name());
+    markUnknown(name());
     return pc();
   }
 
@@ -189,6 +189,7 @@ auto Bass::evaluateLiteral(Eval::Node* node, uint mode) -> int64_t {
   if(auto constant = knownConstant(s, mode)) return constant().value;
   if(!(mode & Evaluation::Strict) && queryPhase()) {
     if(mode & Evaluation::Known) unknowable++;
+    markUnknown(s);
     return pc();
   }
 
@@ -217,9 +218,7 @@ auto Bass::evaluateAssign(Eval::Node* node, uint mode) -> int64_t {
   if(auto variable = findVariable(s)) {
     uint old = unknowable;
     variable().value = evaluate(node->link[1], mode);
-    if(mode & Evaluation::Known && unknowable != old) {
-      if(!unknowns.find(variable().name)) unknowns.insert(variable().name);
-    }
+    if(unknowable != old) markUnknown(variable().name);
     return variable().value;
   }
 

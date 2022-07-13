@@ -394,3 +394,12 @@ auto Bass::character(const string& s) -> int64_t {
   if(charactersUseMap) result = stringTable[*result];
   return *result;
 }
+
+auto Bass::markUnknown(const string& s) -> bool {
+  if(!unknowns.find(s)) {
+    orderedUnknowns.append(s);
+    unknowns.insert(s);
+    return true;
+  }
+  return false;
+}

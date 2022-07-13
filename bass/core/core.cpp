@@ -84,13 +84,15 @@ auto Bass::assemble(bool strict) -> bool {
     phase = Phase::Query;
     architecture = new Architecture{*this};
     execute();
-    for(auto s : unknowns.items()) fprintf(stderr, "Unk(Q): %s\n", s.data());
+    for(auto s : orderedUnknowns) fprintf(stderr, "Unk(Q): %s\n", s.data());
+
+    orderedUnknowns.reset();
     unknowns.reset();
 
     phase = Phase::Write;
     architecture = new Architecture{*this};
     execute();
-    for(auto s : unknowns.items()) fprintf(stderr, "Unk(W): %s\n", s.data());
+    for(auto s : orderedUnknowns) fprintf(stderr, "Unk(W): %s\n", s.data());
   } catch(...) {
     return false;
   }

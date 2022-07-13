@@ -47,7 +47,7 @@ auto Bass::assemble(const string& statement) -> bool {
     auto p = s.contains("=") ? s.trimLeft("constant ", 1L).split("=", 1L).strip() : s.trim("constant ", ")", 1L).split("(", 1L).strip();
     uint old = unknowable;
     setConstant(p(0), evaluate(p(1), Evaluation::Known));
-    if(unknowable != old && !unknowns.find(p(0))) unknowns.insert(p(0));
+    if(unknowable != old) markUnknown(p(0));
     return true;
   }
 
@@ -194,7 +194,7 @@ auto Bass::assemble(const string& statement) -> bool {
     if(name) {
       setConstant({name}, pc());
       setConstant({name, ".size"}, length);
-      if(!unknowns.find(name)) unknowns.insert(name);
+      markUnknown(name);
     }
     fp.seek(offset);
     while(!fp.end() && length--) write(fp.read());

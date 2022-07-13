@@ -199,6 +199,8 @@ struct Bass {
   auto text(string s) -> string;
   auto character(const string& s) -> int64_t;
 
+  auto markUnknown(const string& s) -> bool;
+
   //internal state
   Instruction* activeInstruction = nullptr;  //used by notice, warning, error
   vector<Instruction> program;    //parsed source code statements
@@ -225,6 +227,7 @@ struct Bass {
   uint cantUndo = 0;              //count irreversible function calls in Undoable mode
   uint unknowable = 0;            //count unknowable values in Known mode
   hashset<string> unknowns;       //names of constants that may change between phases
+  vector<string> orderedUnknowns; //those names in order of appearance
 
   file_buffer targetFile;
   string_vector sourceFilenames;
