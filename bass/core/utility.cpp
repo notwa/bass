@@ -170,15 +170,16 @@ auto Bass::knownVariable(const string& name, uint mode) -> maybe<Variable&> {
   return nothing;
 }
 
-auto Bass::setConstant(const string& name, int64_t value) -> void {
+auto Bass::setConstant(const string& name, int64_t value) -> Constant& {
   if(!validate(name)) error("invalid constant identifier: ", name);
   string scopedName = {scope.merge("."), scope ? "." : "", name};
 
   if(auto constant = constants.find({scopedName})) {
     if(queryPhase()) error("constant cannot be modified: ", scopedName);
     constant().value = value;
+    return constant();
   } else {
-    constants.insert({scopedName, value});
+    return constants.insert({scopedName, value})();
   }
 }
 

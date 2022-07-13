@@ -121,7 +121,7 @@ struct Bass {
     Directives()
     : EmitBytes ({ {"db ", 1}, {"dw ", 2}, {"dl ", 3}, {"dd ", 4}, {"dq ", 8}})
     {}
-    
+
     void add(string token, uint dataLength) {
       EmitBytes.append( {token, dataLength} );
     }
@@ -181,7 +181,7 @@ struct Bass {
   auto findVariable(const string& name) -> maybe<Variable&>;
   auto knownVariable(const string& name, uint mode) -> maybe<Variable&>;
 
-  auto setConstant(const string& name, int64_t value) -> void;
+  auto setConstant(const string& name, int64_t value) -> Constant&;
   auto findConstant(const string& name) -> maybe<Constant&>;
   auto knownConstant(const string& name, uint mode) -> maybe<Constant&>;
 

@@ -46,8 +46,8 @@ auto Bass::assemble(const string& statement) -> bool {
   if(s.match("constant ?*")) {
     auto p = s.contains("=") ? s.trimLeft("constant ", 1L).split("=", 1L).strip() : s.trim("constant ", ")", 1L).split("(", 1L).strip();
     uint old = unknowable;
-    setConstant(p(0), evaluate(p(1), Evaluation::Known));
-    if(unknowable != old) markUnknown(p(0));
+    auto& constant = setConstant(p(0), evaluate(p(1), Evaluation::Known));
+    if(unknowable != old) markUnknown(constant.name);
     return true;
   }
 
@@ -55,19 +55,22 @@ auto Bass::assemble(const string& statement) -> bool {
   if(s.match("?*:") || s.match("?*: {")) {
     s.trimRight(" {", 1L);
     s.trimRight(":", 1L);
-    setConstant(s, pc());
+    auto& constant = setConstant(s, pc());
+    markUnknown(constant.name);
     return true;
   }
 
   //- or - {
   if(s.match("-") || s.match("- {")) {
-    setConstant({"lastLabel#", lastLabelCounter++}, pc());
+    auto& constant = setConstant({"lastLabel#", lastLabelCounter++}, pc());
+    markUnknown(constant.name);
     return true;
   }
 
   //+ or + {
   if(s.match("+") || s.match("+ {")) {
-    setConstant({"nextLabel#", nextLabelCounter++}, pc());
+    auto& constant = setConstant({"nextLabel#", nextLabelCounter++}, pc());
+    markUnknown(constant.name);
     return true;
   }
 
@@ -192,9 +195,9 @@ auto Bass::assemble(const string& statement) -> bool {
     uint length = p.size() ? evaluate(p.take(0)) : 0;
     if(length == 0) length = fp.size() - offset;
     if(name) {
-      setConstant({name}, pc());
+      auto& constant = setConstant({name}, pc());
       setConstant({name, ".size"}, length);
-      markUnknown(name);
+      markUnknown(constant.name);
     }
     fp.seek(offset);
     while(!fp.end() && length--) write(fp.read());
