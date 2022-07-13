@@ -162,12 +162,12 @@ auto Bass::findVariable(const string& name) -> maybe<Variable&> {
 }
 
 auto Bass::knownVariable(const string& name, Evaluation mode) -> maybe<Variable&> {
-    if(auto variable = findVariable(name)) {
-        //name might differ from the one passed by argument due to scoping
-        if(mode & Evaluation::Known && unknowns.find(variable().name)) unknowable++;
-        return variable;
-    }
-    return nothing;
+  if(auto variable = findVariable(name)) {
+    //name might differ from the one passed by argument due to scoping
+    if(mode & Evaluation::Known && unknowns.find(variable().name)) unknowable++;
+    return variable;
+  }
+  return nothing;
 }
 
 auto Bass::setConstant(const string& name, int64_t value) -> void {
@@ -197,12 +197,12 @@ auto Bass::findConstant(const string& name) -> maybe<Constant&> {
 }
 
 auto Bass::knownConstant(const string& name, Evaluation mode) -> maybe<Constant&> {
-    if(auto constant = findConstant(name)) {
-        //name might differ from the one passed by argument due to scoping
-        if(mode & Evaluation::Known && unknowns.find(constant().name)) unknowable++;
-        return constant;
-    }
-    return nothing;
+  if(auto constant = findConstant(name)) {
+    //name might differ from the one passed by argument due to scoping
+    if(mode & Evaluation::Known && unknowns.find(constant().name)) unknowable++;
+    return constant;
+  }
+  return nothing;
 }
 
 auto Bass::setArray(const string& name, const vector<int64_t>& values, Frame::Level level) -> void {
