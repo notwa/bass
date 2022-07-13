@@ -14,21 +14,30 @@ auto Table::assemble(const string& statement) -> bool {
   }
 
   uint pc = Architecture::pc();
+  string_vector args;
+  maybe<Opcode&> match;
 
-  for(auto& opcode : table) {
+  for(uint n : range(table.size())) {
+    auto& opcode = table[n];
     if(!tokenize(s, opcode.pattern)) continue;
 
-    string_vector args;
+    args.reset();
     tokenize(args, s, opcode.pattern);
     if(args.size() != opcode.number.size()) continue;
 
+    // This assumes the architecture's opcodes are ordered from most to least specific.
+    // Example: "lda *08,x" is more specific than "lda *16,x" and more than "lda *16".
     bool mismatch = false;
+    bool hasUnknowns = false;
     for(auto& format : opcode.format) {
       if(format.match == Format::Match::Weak) {
         // Weak matches never miss
       } else if(format.type == Format::Type::Absolute) {
         uint bits = bitLength(args[format.argument]);
-        if(format.match == Format::Match::Strong) {
+        //printf("#%u: %s\n", bits, args[format.argument].data());
+        if(!bits) {
+          hasUnknowns = true;
+        } else if(format.match == Format::Match::Strong) {
           if(bits > opcode.number[format.argument].bits) {
             mismatch = true;
             break;
@@ -42,6 +51,15 @@ auto Table::assemble(const string& statement) -> bool {
       }
     }
     if(mismatch) continue;
+
+    if(!hasUnknowns || self.queryPhase()) match = opcode;
+    break;
+  }
+
+  if(match) {
+    auto& opcode = match();
+    args.reset();
+    tokenize(args, s, opcode.pattern);
 
     for(auto& format : opcode.format) {
       switch(format.type) {
@@ -254,13 +272,19 @@ auto Table::bitLength(string& text) -> uint {
 
   if(self.unknowable != old) {
     fprintf(stderr, "UNKNOWN within instruction! %s\n", text.data());
+    return 0;
   }
 
   if(self.cantUndo) {
     fprintf(stderr, "NO UNDO within instruction! %s\n", text.data());
   }
 
-  return data >= 0 ? floor(log2(data)) + 1 : 64;
+  //return data ? (data > 0 ? floor(log2(data)) + 1 : 64) : 1;
+  if(data < 0) return 64;
+
+  uint bits = 0;
+  while(data) { data >>= 1; bits++; }
+  return bits ? bits : 1;
 }
 
 auto Table::writeBits(uint64_t data, uint length) -> void {
