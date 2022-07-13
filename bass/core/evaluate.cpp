@@ -1,4 +1,4 @@
-auto Bass::evaluate(const string& expression, Evaluation mode) -> int64_t {
+auto Bass::evaluate(const string& expression, uint mode) -> int64_t {
   maybe<string> name;
   if(expression == "--") name = {"lastLabel#", lastLabelCounter - 2};
   if(expression == "-" ) name = {"lastLabel#", lastLabelCounter - 1};
@@ -23,7 +23,7 @@ auto Bass::evaluate(const string& expression, Evaluation mode) -> int64_t {
   return evaluate(node, mode);
 }
 
-auto Bass::evaluate(Eval::Node* node, Evaluation mode) -> int64_t {
+auto Bass::evaluate(Eval::Node* node, uint mode) -> int64_t {
   #define p(n) evaluate(node->link[n], mode)
 
   switch(node->type) {
@@ -69,7 +69,7 @@ auto Bass::quantifyParameters(Eval::Node* node) -> int64_t {
   return 1;  //any other type here signifies one argument
 }
 
-auto Bass::evaluateParameters(Eval::Node* node, Evaluation mode) -> vector<int64_t> {
+auto Bass::evaluateParameters(Eval::Node* node, uint mode) -> vector<int64_t> {
   vector<int64_t> result;
   if(node->type == Eval::Node::Type::Null) return result;
   if(node->type != Eval::Node::Type::Separator) { result.append(evaluate(node, mode)); return result; }
@@ -77,7 +77,7 @@ auto Bass::evaluateParameters(Eval::Node* node, Evaluation mode) -> vector<int64
   return result;
 }
 
-auto Bass::evaluateExpression(Eval::Node* node, Evaluation mode) -> int64_t {
+auto Bass::evaluateExpression(Eval::Node* node, uint mode) -> int64_t {
   string name = node->link[0]->literal;
   if(auto parameters = quantifyParameters(node->link[1])) name.append("#", parameters);
 
@@ -174,7 +174,7 @@ auto Bass::evaluateString(Eval::Node* node) -> string {
   return {};
 }
 
-auto Bass::evaluateLiteral(Eval::Node* node, Evaluation mode) -> int64_t {
+auto Bass::evaluateLiteral(Eval::Node* node, uint mode) -> int64_t {
   string& s = node->literal;
 
   if(s[0] == '0' && s[1] == 'b') return toBinary(s);
@@ -196,7 +196,7 @@ auto Bass::evaluateLiteral(Eval::Node* node, Evaluation mode) -> int64_t {
   return 0;
 }
 
-auto Bass::evaluateSubscript(Eval::Node* node, Evaluation mode) -> int64_t {
+auto Bass::evaluateSubscript(Eval::Node* node, uint mode) -> int64_t {
   string& s = node->link[0]->literal;
 
   if(auto array = findArray(s)) {
@@ -211,7 +211,7 @@ auto Bass::evaluateSubscript(Eval::Node* node, Evaluation mode) -> int64_t {
   return 0;
 }
 
-auto Bass::evaluateAssign(Eval::Node* node, Evaluation mode) -> int64_t {
+auto Bass::evaluateAssign(Eval::Node* node, uint mode) -> int64_t {
   string& s = node->link[0]->literal;
 
   if(auto variable = findVariable(s)) {

@@ -161,7 +161,7 @@ auto Bass::findVariable(const string& name) -> maybe<Variable&> {
   return nothing;
 }
 
-auto Bass::knownVariable(const string& name, Evaluation mode) -> maybe<Variable&> {
+auto Bass::knownVariable(const string& name, uint mode) -> maybe<Variable&> {
   if(auto variable = findVariable(name)) {
     //name might differ from the one passed by argument due to scoping
     if(mode & Evaluation::Known && unknowns.find(variable().name)) unknowable++;
@@ -196,7 +196,7 @@ auto Bass::findConstant(const string& name) -> maybe<Constant&> {
   return nothing;
 }
 
-auto Bass::knownConstant(const string& name, Evaluation mode) -> maybe<Constant&> {
+auto Bass::knownConstant(const string& name, uint mode) -> maybe<Constant&> {
   if(auto constant = findConstant(name)) {
     //name might differ from the one passed by argument due to scoping
     if(mode & Evaluation::Known && unknowns.find(constant().name)) unknowable++;

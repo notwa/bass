@@ -31,7 +31,7 @@ struct Architecture {
     return self.readArchitecture(s);
   }
 
-  auto evaluate(const string& expression, Bass::Evaluation mode = Bass::Evaluation::Default) -> int64_t {
+  auto evaluate(const string& expression, uint mode = Bass::Evaluation::Default) -> int64_t {
     return self.evaluate(expression, mode);
   }
 

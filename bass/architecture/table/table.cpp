@@ -25,7 +25,7 @@ auto Table::assemble(const string& statement) -> bool {
     bool mismatch = false;
     for(auto& format : opcode.format) {
       if(format.match == Format::Match::Weak) {
-        // Do nothing
+        // Weak matches never miss
       } else if(format.type == Format::Type::Absolute) {
         uint bits = bitLength(args[format.argument]);
         if(format.match == Format::Match::Strong) {
@@ -248,7 +248,18 @@ auto Table::bitLength(string& text) -> uint {
   if(*p >= '0' && *p <= '9') length = decLength(p);
   if(length) return length;
 
-  auto data = evaluate(text);
+  uint old = self.unknowable;
+  self.cantUndo = 0;
+  auto data = evaluate(text, Bass::Evaluation::Known | Bass::Evaluation::Undoable);
+
+  if(self.unknowable != old) {
+    fprintf(stderr, "UNKNOWN within instruction! %s\n", text.data());
+  }
+
+  if(self.cantUndo) {
+    fprintf(stderr, "NO UNDO within instruction! %s\n", text.data());
+  }
+
   return data >= 0 ? floor(log2(data)) + 1 : 64;
 }
 

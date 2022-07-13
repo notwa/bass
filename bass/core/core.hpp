@@ -9,6 +9,7 @@ struct Bass {
 
   enum class Phase : uint { Analyze, Query, Write };
   enum class Endian : uint { LSB, MSB };
+  //TODO: make this a proper, strict, enum-like class again! can't do that with flags.
   enum Evaluation : uint { Default = 0, Strict = 1, Undoable = 2, Known = 4 };  //strict mode disallows forward-declaration of constants
 
   struct Instruction {
@@ -143,15 +144,15 @@ struct Bass {
   template<typename... P> auto error(P&&... p) -> void;
 
   //evaluate.cpp
-  auto evaluate(const string& expression, Evaluation mode = Evaluation::Default) -> int64_t;
-  auto evaluate(Eval::Node* node, Evaluation mode) -> int64_t;
+  auto evaluate(const string& expression, uint mode = Evaluation::Default) -> int64_t;
+  auto evaluate(Eval::Node* node, uint mode) -> int64_t;
   auto quantifyParameters(Eval::Node* node) -> int64_t;
-  auto evaluateParameters(Eval::Node* node, Evaluation mode) -> vector<int64_t>;
-  auto evaluateExpression(Eval::Node* node, Evaluation mode) -> int64_t;
+  auto evaluateParameters(Eval::Node* node, uint mode) -> vector<int64_t>;
+  auto evaluateExpression(Eval::Node* node, uint mode) -> int64_t;
   auto evaluateString(Eval::Node* node) -> string;
-  auto evaluateLiteral(Eval::Node* node, Evaluation mode) -> int64_t;
-  auto evaluateSubscript(Eval::Node* node, Evaluation mode) -> int64_t;
-  auto evaluateAssign(Eval::Node* node, Evaluation mode) -> int64_t;
+  auto evaluateLiteral(Eval::Node* node, uint mode) -> int64_t;
+  auto evaluateSubscript(Eval::Node* node, uint mode) -> int64_t;
+  auto evaluateAssign(Eval::Node* node, uint mode) -> int64_t;
 
   //analyze.cpp
   auto analyze() -> bool;
@@ -178,11 +179,11 @@ struct Bass {
 
   auto setVariable(const string& name, int64_t value, Frame::Level level) -> void;
   auto findVariable(const string& name) -> maybe<Variable&>;
-  auto knownVariable(const string& name, Evaluation mode) -> maybe<Variable&>;
+  auto knownVariable(const string& name, uint mode) -> maybe<Variable&>;
 
   auto setConstant(const string& name, int64_t value) -> void;
   auto findConstant(const string& name) -> maybe<Constant&>;
-  auto knownConstant(const string& name, Evaluation mode) -> maybe<Constant&>;
+  auto knownConstant(const string& name, uint mode) -> maybe<Constant&>;
 
   auto setArray(const string& name, const vector<int64_t>& values, Frame::Level level) -> void;
   auto findArray(const string& name) -> maybe<Array&>;
