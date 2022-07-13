@@ -5,9 +5,11 @@ auto Bass::evaluate(const string& expression, Evaluation mode) -> int64_t {
   if(expression == "+" ) name = {"nextLabel#", nextLabelCounter + 0};
   if(expression == "++") name = {"nextLabel#", nextLabelCounter + 1};
   if(name) {
-    if(auto constant = findConstant({name()})) return constant().value;
-    if(queryPhase()) return pc();
-    error("relative label not declared");
+    if(auto constant = knownConstant({name()}, mode)) return constant().value;
+    if(!queryPhase()) error("relative label not declared");
+    if(mode & Evaluation::Known) unknowable++;
+    if(!unknowns.find(name())) unknowns.insert(name());
+    return pc();
   }
 
   Eval::Node* node = nullptr;
@@ -87,7 +89,10 @@ auto Bass::evaluateExpression(Eval::Node* node, Evaluation mode) -> int64_t {
     error("unrecognized array: ", s);
     return 0;
   }
+
   if(name == "array.sort#1") {
+    // TODO: make this undoable by pushing each value in the array.
+    if(mode & Evaluation::Undoable) return cantUndo++;
     string s = evaluateString(node->link[1]);
     if(auto array = findArray(s)) {
       array->values.sort();
@@ -96,11 +101,14 @@ auto Bass::evaluateExpression(Eval::Node* node, Evaluation mode) -> int64_t {
     error("unrecognized array: ", s);
     return 0;
   }
+
   if(name == "assert#1") {
+    if(mode & Evaluation::Undoable) return cantUndo++;
     int64_t result = evaluate(node->link[1], mode);
     if(result == 0) error("assertion failed");
     return 0;
   }
+
   if(name == "file.size#1") {
     string filename = evaluateString(node->link[1]).trim("\"", "\"", 1L);
     string location = {filepath(), filename};
@@ -108,12 +116,15 @@ auto Bass::evaluateExpression(Eval::Node* node, Evaluation mode) -> int64_t {
     error("file not found: ", filename);
     return 0;
   }
+
   if(name == "file.exists#1") {
     string filename = evaluateString(node->link[1]).trim("\"", "\"", 1L);
     string location = {filepath(), filename};
     return file::exists(location);
   }
+
   if(name == "read#1") {
+    if(mode & Evaluation::Undoable) return cantUndo++;
     if(!targetFile) error("no target file open for reading");
     int64_t address = evaluate(node->link[1], mode);
     auto origin = targetFile.offset();
@@ -122,9 +133,17 @@ auto Bass::evaluateExpression(Eval::Node* node, Evaluation mode) -> int64_t {
     targetFile.seek(origin);
     return data;
   }
-  if(name == "origin") return origin;
-  if(name == "base") return base;
-  if(name == "pc") return pc();
+
+  if(name == "origin") {
+    if(mode & Evaluation::Known) unknowable++;
+    return origin;
+  } else if(name == "base") {
+    if(mode & Evaluation::Known) unknowable++;
+    return base;
+  } else if(name == "pc") {
+    if(mode & Evaluation::Known) unknowable++;
+    return pc();
+  }
 
   if(auto expression = findExpression(name)) {
     auto parameters = evaluateParameters(node->link[1], mode);
@@ -166,11 +185,14 @@ auto Bass::evaluateLiteral(Eval::Node* node, Evaluation mode) -> int64_t {
   if(s[0] == '$') return toHex(s);
   if(s.match("'?*'")) return character(s);
 
-  if(auto variable = findVariable(s)) return variable().value;
-  if(auto constant = findConstant(s)) return constant().value;
-  if(mode != Evaluation::Strict && queryPhase()) return pc();
+  if(auto variable = knownVariable(s, mode)) return variable().value;
+  if(auto constant = knownConstant(s, mode)) return constant().value;
+  if(!(mode & Evaluation::Strict) && queryPhase()) {
+    if(mode & Evaluation::Known) unknowable++;
+    return pc();
+  }
 
-  error("unrecognized variable: ", s);
+  error("unrecognized constant or variable: ", s);
   return 0;
 }
 
@@ -193,7 +215,11 @@ auto Bass::evaluateAssign(Eval::Node* node, Evaluation mode) -> int64_t {
   string& s = node->link[0]->literal;
 
   if(auto variable = findVariable(s)) {
+    uint old = unknowable;
     variable().value = evaluate(node->link[1], mode);
+    if(mode & Evaluation::Known && unknowable != old) {
+      if(!unknowns.find(variable().name)) unknowns.insert(variable().name);
+    }
     return variable().value;
   }
 

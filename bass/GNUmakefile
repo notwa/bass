@@ -1,7 +1,7 @@
 name := bass
 build := release
 console := true
-flags += -I..
+flags += -I.. -fdiagnostics-color=always
 
 nall.path := ../nall
 include $(nall.path)/GNUmakefile

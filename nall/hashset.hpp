@@ -23,7 +23,7 @@ struct hashset {
   auto operator=(const hashset& source) -> hashset& {
     reset();
     if(source.pool) {
-      for(uint n : range(source.count)) {
+      for(uint n : range(source.count)) { //FIXME: should be more like reset()?
         insert(*source.pool[n]);
       }
     }
@@ -122,6 +122,15 @@ struct hashset {
     }
 
     return false;
+  }
+
+  auto items() -> vector<T> {
+    vector<T> vec;
+    if(!pool || !count) return vec;
+
+    vec.reserve(count);
+    for(uint n : range(length)) if(pool[n]) vec.append(*pool[n]);
+    return vec;
   }
 
 protected:

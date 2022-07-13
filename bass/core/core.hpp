@@ -9,7 +9,7 @@ struct Bass {
 
   enum class Phase : uint { Analyze, Query, Write };
   enum class Endian : uint { LSB, MSB };
-  enum class Evaluation : uint { Default = 0, Strict = 1 };  //strict mode disallows forward-declaration of constants
+  enum Evaluation : uint { Default = 0, Strict = 1, Undoable = 2, Known = 4 };  //strict mode disallows forward-declaration of constants
 
   struct Instruction {
     string statement;
@@ -178,9 +178,11 @@ struct Bass {
 
   auto setVariable(const string& name, int64_t value, Frame::Level level) -> void;
   auto findVariable(const string& name) -> maybe<Variable&>;
+  auto knownVariable(const string& name, Evaluation mode) -> maybe<Variable&>;
 
   auto setConstant(const string& name, int64_t value) -> void;
   auto findConstant(const string& name) -> maybe<Constant&>;
+  auto knownConstant(const string& name, Evaluation mode) -> maybe<Constant&>;
 
   auto setArray(const string& name, const vector<int64_t>& values, Frame::Level level) -> void;
   auto findArray(const string& name) -> maybe<Array&>;
@@ -219,6 +221,9 @@ struct Bass {
   bool charactersUseMap = false;  //0 = '*' parses as ASCII; 1 = '*' uses stringTable[]
   bool strict = false;            //upgrade warnings to errors when true
   Directives directives;          //active directives
+  uint cantUndo = 0;              //count irreversible function calls in Undoable mode
+  uint unknowable = 0;            //count unknowable values in Known mode
+  hashset<string> unknowns;       //names of constants that may change between phases
 
   file_buffer targetFile;
   string_vector sourceFilenames;

@@ -32,7 +32,7 @@ auto Bass::assemble(const string& statement) -> bool {
   //function name {
   if(s.match("function ?* {")) {
     s.trim("function ", "{", 1L).strip();
-    setConstant(s, pc());
+    setConstant(s, pc()); //FIXME: sus
     scope.append(s);
     return true;
   }
@@ -44,13 +44,10 @@ auto Bass::assemble(const string& statement) -> bool {
   }
 
   if(s.match("constant ?*")) {
-    if(s.contains("=")) {
-      auto p = s.trimLeft("constant ", 1L).split("=", 1L).strip();
-      setConstant(p(0), evaluate(p(1)));
-    } else {
-      auto p = s.trim("constant ", ")", 1L).split("(", 1L).strip();
-      setConstant(p(0), evaluate(p(1)));
-    }
+    auto p = s.contains("=") ? s.trimLeft("constant ", 1L).split("=", 1L).strip() : s.trim("constant ", ")", 1L).split("(", 1L).strip();
+    uint old = unknowable;
+    setConstant(p(0), evaluate(p(1), Evaluation::Known));
+    if(unknowable != old && !unknowns.find(p(0))) unknowns.insert(p(0));
     return true;
   }
 
@@ -197,6 +194,7 @@ auto Bass::assemble(const string& statement) -> bool {
     if(name) {
       setConstant({name}, pc());
       setConstant({name, ".size"}, length);
+      if(!unknowns.find(name)) unknowns.insert(name);
     }
     fp.seek(offset);
     while(!fp.end() && length--) write(fp.read());
