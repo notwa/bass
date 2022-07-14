@@ -1,6 +1,8 @@
 #pragma once
 
 #include <type_traits>
+#include <utility>
+
 #include <nall/stdint.hpp>
 
 //pull all type traits used by nall from std namespace into nall namespace
