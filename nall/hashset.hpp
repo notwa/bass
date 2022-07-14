@@ -104,27 +104,29 @@ struct hashset {
     //double pool size when load is >= 50%
     if(count >= (length >> 1)) reserve(length << 1);
 
-    const uint hash = value.hash();
-    uint swaphash = hash;
     auto ptr = new T(value);
+    const uint hash = value.hash();
+
+    auto heldPtr = ptr;
+    uint heldHash = hash;
     for(uint i = 0; i < length; i++) {
       uint index = mask(hash + i);
       entry_t& entry = pool[index];
-      if(!entry) { count++; entry = {ptr, swaphash}; return *entry.ptr; }
-      if(entry.hash == swaphash && *entry.ptr == *ptr) return *entry.ptr;
+      if(!entry) { count++; entry = {heldPtr, heldHash}; return *ptr; }
+      if(entry.hash == heldHash && *entry.ptr == *heldPtr) return *heldPtr;
 
       if(i) {
         uint entry_relative = mask(index - entry.hash);
         if(entry_relative < i) {
-          swap(pool[index].ptr, ptr);
-          swap(pool[index].hash, swaphash);
+          swap(pool[index].ptr, heldPtr);
+          swap(pool[index].hash, heldHash);
         }
       }
     }
 
     //FIXME: this code should be unreachable, but if it isn't, then
     //       it's deleting the least-recently used value and not the inserted one!
-    delete ptr;
+    delete heldPtr;
     return nothing;
   }
 
