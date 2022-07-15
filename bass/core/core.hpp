@@ -65,7 +65,22 @@ struct Bass {
     int64_t value;
   };
 
-  using Constant = Variable;  //Variable and Constant structures are identical
+  struct Constant {
+    Constant() {}
+    Constant(const string& name) : name(name) {}
+    Constant(const string& name, int64_t value) : name(name), value(value) {}
+
+    auto hash() const -> uint { return name.hash(); }
+    auto operator==(const Constant& source) const -> bool { return name == source.name; }
+    auto operator< (const Constant& source) const -> bool { return name <  source.name; }
+
+    string name;
+    int64_t value;
+
+    bool indeterminate = false; //(LHS) true when its definition is based on a placeholder value
+    bool unknown = false; //(RHS) true when it was substituted with a placeholder value
+    bool held = true; //constant can be overwritten once when false
+  };
 
   struct Array {
     Array() {}
@@ -182,6 +197,7 @@ struct Bass {
   auto knownVariable(const string& name, uint mode) -> maybe<Variable&>;
 
   auto setConstant(const string& name, int64_t value) -> Constant&;
+  auto markUnknown(const string& name) -> bool;
   auto findConstant(const string& name) -> maybe<Constant&>;
   auto knownConstant(const string& name, uint mode) -> maybe<Constant&>;
 
@@ -198,8 +214,6 @@ struct Bass {
   auto validate(const string& s) -> bool;
   auto text(string s) -> string;
   auto character(const string& s) -> int64_t;
-
-  auto markUnknown(const string& s) -> bool;
 
   //internal state
   Instruction* activeInstruction = nullptr;  //used by notice, warning, error
@@ -226,7 +240,7 @@ struct Bass {
   Directives directives;          //active directives
   uint cantUndo = 0;              //count irreversible function calls in Undoable mode
   uint unknowable = 0;            //count unknowable values in Known mode
-  hashset<string> unknowns;       //names of constants that may change between phases
+  //hashset<string> unknowns;       //names of constants that may change between phases
   vector<string> orderedUnknowns; //those names in order of appearance
 
   file_buffer targetFile;

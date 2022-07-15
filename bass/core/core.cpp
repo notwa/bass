@@ -86,8 +86,6 @@ auto Bass::assemble(bool strict) -> bool {
     execute();
     for(auto s : orderedUnknowns) fprintf(stderr, "Unk(Q): %s\n", s.data());
 
-    orderedUnknowns.reset();
-    unknowns.reset();
 
     phase = Phase::Write;
     architecture = new Architecture{*this};

@@ -218,7 +218,7 @@ auto Bass::evaluateAssign(Eval::Node* node, uint mode) -> int64_t {
   if(auto variable = findVariable(s)) {
     uint old = unknowable;
     variable().value = evaluate(node->link[1], mode);
-    if(unknowable != old) markUnknown(variable().name);
+    if(unknowable != old) error("TODO: handle unknown variables too!");
     return variable().value;
   }
 

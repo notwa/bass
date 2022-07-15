@@ -164,7 +164,8 @@ auto Bass::findVariable(const string& name) -> maybe<Variable&> {
 auto Bass::knownVariable(const string& name, uint mode) -> maybe<Variable&> {
   if(auto variable = findVariable(name)) {
     //name might differ from the one passed by argument due to scoping
-    if(mode & Evaluation::Known && unknowns.find(variable().name)) unknowable++;
+    //TODO: make variable names unique from constants to avoid collisions.
+    //if(mode & Evaluation::Known && unknowns.find(variable().name)) unknowable++;
     return variable;
   }
   return nothing;
@@ -175,11 +176,36 @@ auto Bass::setConstant(const string& name, int64_t value) -> Constant& {
   string scopedName = {scope.merge("."), scope ? "." : "", name};
 
   if(auto constant = constants.find({scopedName})) {
-    if(queryPhase()) error("constant cannot be modified: ", scopedName);
+    if(!constant().held) {
+      if(writePhase()) error("unheld constant in writePhase!");
+      constant().held = true;
+    } else if(queryPhase()) {
+      error("constant cannot be modified: ", scopedName);
+    }
+
     constant().value = value;
     return constant();
   } else {
     return constants.insert({scopedName, value})();
+  }
+}
+
+auto Bass::markUnknown(const string& name) -> bool {
+  if(!validate(name)) error("invalid constant identifier: ", name);
+  string scopedName = {scope.merge("."), scope ? "." : "", name};
+
+  fprintf(stderr, "unknowing %s at line %u\n", scopedName.data(), activeInstruction->lineNumber);
+
+  if(auto constant = constants.find({scopedName})) {
+    if(!constant().unknown) orderedUnknowns.append(scopedName);
+    constant().unknown = true;
+    return true;
+  } else {
+    auto newConstant = constants.insert({scopedName, pc()});
+    orderedUnknowns.append(scopedName);
+    newConstant().unknown = true;
+    newConstant().held = false;
+    return false;
   }
 }
 
@@ -199,8 +225,11 @@ auto Bass::findConstant(const string& name) -> maybe<Constant&> {
 
 auto Bass::knownConstant(const string& name, uint mode) -> maybe<Constant&> {
   if(auto constant = findConstant(name)) {
+    if(writePhase() && constant().indeterminate) error("indeterminate constant: ", constant().name);
     //name might differ from the one passed by argument due to scoping
-    if(mode & Evaluation::Known && unknowns.find(constant().name)) unknowable++;
+    if(mode & Evaluation::Known && constant().unknown) unknowable++;
+    //hack to prevent branches from erroring too early:
+    if(constant().unknown && !constant().held) constant().value = pc();
     return constant;
   }
   return nothing;
@@ -394,13 +423,4 @@ auto Bass::character(const string& s) -> int64_t {
 
   if(charactersUseMap) result = stringTable[*result];
   return *result;
-}
-
-auto Bass::markUnknown(const string& s) -> bool {
-  if(!unknowns.find(s)) {
-    orderedUnknowns.append(s);
-    unknowns.insert(s);
-    return true;
-  }
-  return false;
 }

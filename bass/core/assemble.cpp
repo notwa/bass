@@ -47,7 +47,7 @@ auto Bass::assemble(const string& statement) -> bool {
     auto p = s.contains("=") ? s.trimLeft("constant ", 1L).split("=", 1L).strip() : s.trim("constant ", ")", 1L).split("(", 1L).strip();
     uint old = unknowable;
     auto& constant = setConstant(p(0), evaluate(p(1), Evaluation::Known));
-    if(unknowable != old) markUnknown(constant.name);
+    if(unknowable != old) constant.indeterminate = true;
     return true;
   }
 
@@ -56,21 +56,21 @@ auto Bass::assemble(const string& statement) -> bool {
     s.trimRight(" {", 1L);
     s.trimRight(":", 1L);
     auto& constant = setConstant(s, pc());
-    markUnknown(constant.name);
+    constant.indeterminate = true;
     return true;
   }
 
   //- or - {
   if(s.match("-") || s.match("- {")) {
     auto& constant = setConstant({"lastLabel#", lastLabelCounter++}, pc());
-    markUnknown(constant.name);
+    constant.indeterminate = true;
     return true;
   }
 
   //+ or + {
   if(s.match("+") || s.match("+ {")) {
     auto& constant = setConstant({"nextLabel#", nextLabelCounter++}, pc());
-    markUnknown(constant.name);
+    constant.indeterminate = true;
     return true;
   }
 
@@ -197,7 +197,7 @@ auto Bass::assemble(const string& statement) -> bool {
     if(name) {
       auto& constant = setConstant({name}, pc());
       setConstant({name, ".size"}, length);
-      markUnknown(constant.name);
+      constant.indeterminate = true;
     }
     fp.seek(offset);
     while(!fp.end() && length--) write(fp.read());
