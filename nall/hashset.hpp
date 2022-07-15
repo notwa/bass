@@ -1,6 +1,6 @@
 #pragma once
 
-//hashset
+//hashset (Robin Hood implementation)
 //
 //search: O(1) average; O(n) worst
 //insert: O(1) average; O(n) worst
@@ -10,10 +10,24 @@
 //  auto T::hash() const -> uint;
 //  auto T::operator==(const T&) const -> bool;
 
+#include <nall/bit.hpp>
+#include <nall/maybe.hpp>
+#include <nall/stdint.hpp>
+#include <nall/vector.hpp>
+
 namespace nall {
 
 template<typename T>
 struct hashset {
+  struct entry_t {
+    T* ptr = nullptr;
+    uint hash = 0;
+    explicit operator bool() const { return ptr != nullptr; }
+    auto operator==(const entry_t& source) const -> bool {
+      return hash == source.hash && *ptr == *source.ptr;
+    }
+  };
+
   hashset() = default;
   hashset(uint length) : length(bit::round(length)) {}
   hashset(const hashset& source) { operator=(source); }
@@ -23,9 +37,7 @@ struct hashset {
   auto operator=(const hashset& source) -> hashset& {
     reset();
     if(source.pool) {
-      for(uint n : range(source.count)) { //FIXME: should be more like reset()?
-        insert(*source.pool[n]);
-      }
+      for(uint n : range(source.length)) if(source.pool[n]) insert(*source.pool[n].ptr);
     }
     return *this;
   }
@@ -49,8 +61,8 @@ struct hashset {
     if(pool) {
       for(uint n : range(length)) {
         if(pool[n]) {
-          delete pool[n];
-          pool[n] = nullptr;
+          delete pool[n].ptr;
+          pool[n].ptr = nullptr;
         }
       }
       delete pool;
@@ -62,66 +74,99 @@ struct hashset {
 
   auto reserve(uint size) -> void {
     //ensure all items will fit into pool (with <= 50% load) and amortize growth
-    size = bit::round(max(size, count << 1));
-    T** copy = new T*[size]();
-
-    if(pool) {
-      for(uint n : range(length)) {
-        if(pool[n]) {
-          uint hash = (*pool[n]).hash() & (size - 1);
-          while(copy[hash]) if(++hash >= size) hash = 0;
-          copy[hash] = pool[n];
-          pool[n] = nullptr;
-        }
-      }
-    }
-
+    auto oldEntries = entries();
     delete pool;
-    pool = copy;
-    length = size;
+
+    length = bit::round(max(size, count << 1));
+    pool = new entry_t[length]();
+
+    count = 0;
+    if(pool) for(auto& entry : oldEntries) insert(*entry.ptr);
   }
 
   auto find(const T& value) -> maybe<T&> {
-    if(!pool) return nothing;
+    const uint hash = value.hash();
+    if(pool) for(uint i = 0; i < length; i++) {
+      uint index = mask(hash + i);
+      entry_t& entry = pool[index];
+      if(!entry) break;
+      if(entry.hash == hash && *entry.ptr == value) return *entry.ptr;
 
-    uint hash = value.hash() & (length - 1);
-    while(pool[hash]) {
-      if(value == *pool[hash]) return *pool[hash];
-      if(++hash >= length) hash = 0;
+      if(i) {
+        uint entry_relative = mask(index - entry.hash);
+        if(entry_relative < i) break;
+      }
     }
-
     return nothing;
   }
 
   auto insert(const T& value) -> maybe<T&> {
-    if(!pool) pool = new T*[length]();
-
+    if(!pool) pool = new entry_t[length]();
     //double pool size when load is >= 50%
     if(count >= (length >> 1)) reserve(length << 1);
-    count++;
 
-    uint hash = value.hash() & (length - 1);
-    while(pool[hash]) if(++hash >= length) hash = 0;
-    pool[hash] = new T(value);
+    auto ptr = new T(value);
+    const uint hash = value.hash();
 
-    return *pool[hash];
+    auto heldPtr = ptr;
+    uint heldHash = hash;
+    for(uint i = 0; i < length; i++) {
+      uint index = mask(hash + i);
+      entry_t& entry = pool[index];
+      if(!entry) { count++; entry = {heldPtr, heldHash}; return *ptr; }
+      if(entry.hash == heldHash && *entry.ptr == *heldPtr) return *heldPtr;
+
+      if(i) {
+        uint entry_relative = mask(index - entry.hash);
+        if(entry_relative < i) {
+          swap(pool[index].ptr, heldPtr);
+          swap(pool[index].hash, heldHash);
+        }
+      }
+    }
+
+    //FIXME: this code should be unreachable, but if it isn't, then
+    //       it's deleting the least-recently used value and not the inserted one!
+    delete heldPtr;
+    return nothing;
   }
 
   auto remove(const T& value) -> bool {
-    if(!pool) return false;
+    const uint hash = value.hash();
+    if(pool) for(uint i = 0; i < length; i++) {
+      uint index = mask(hash + i);
+      entry_t& entry = pool[index];
+      if(!entry) break;
 
-    uint hash = value.hash() & (length - 1);
-    while(pool[hash]) {
-      if(value == *pool[hash]) {
-        delete pool[hash];
-        pool[hash] = nullptr;
+      if(entry.hash == hash && *entry.ptr == value) {
+        delete entry.ptr;
+
+        for(uint j = 1; j < length; j++) {
+          uint other = mask(hash + i + j);
+          entry_t& entry2 = pool[other];
+          if(!entry2) break;
+          uint entry_relative = mask(other - entry2.hash);
+          if(!entry_relative) break;
+          pool[index] = pool[other];
+          index = other;
+        }
+
         count--;
+        pool[index] = entry_t();
         return true;
       }
-      if(++hash >= length) hash = 0;
+
+      if(i) {
+        uint entry_relative = mask(index - entry.hash);
+        if(entry_relative < i) break;
+      }
     }
 
     return false;
+  }
+
+  auto inline mask(const uint n) /*const*/ -> const uint {
+    return n & (length - 1);
   }
 
   auto items() -> vector<T> {
@@ -129,14 +174,23 @@ struct hashset {
     if(!pool || !count) return vec;
 
     vec.reserve(count);
-    for(uint n : range(length)) if(pool[n]) vec.append(*pool[n]);
+    for(uint n : range(length)) if(pool[n]) vec.append(*pool[n].ptr);
     return vec;
   }
 
 protected:
-  T** pool = nullptr;
+  entry_t* pool = nullptr;
   uint length = 8;  //length of pool
   uint count = 0;   //number of objects inside of the pool
+
+  auto entries() -> vector<entry_t> {
+    vector<entry_t> vec;
+    if(!pool || !count) return vec;
+
+    vec.reserve(count);
+    for(uint n : range(length)) if(pool[n]) vec.append(pool[n]);
+    return vec;
+  }
 };
 
 }
