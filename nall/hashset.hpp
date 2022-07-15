@@ -80,6 +80,7 @@ struct hashset {
     length = bit::round(max(size, count << 1));
     pool = new entry_t[length]();
 
+    count = 0;
     if(pool) for(auto& entry : oldEntries) insert(*entry.ptr);
   }
 
