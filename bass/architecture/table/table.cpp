@@ -24,16 +24,21 @@ auto Table::assemble(const string& statement) -> bool {
 
     bool mismatch = false;
     for(auto& format : opcode.format) {
-      if(format.type == Format::Type::Absolute) {
-        if(format.match != Format::Match::Weak) {
-          uint bits = bitLength(args[format.argument]);
-          if(format.match == Format::Match::Strong && bits > opcode.number[format.argument].bits) {
-            if(bits != opcode.number[format.argument].bits) {
-              if(format.match == Format::Match::Exact || bits != 0) {
-                mismatch = true;
-                break;
-              }
-            }
+      if(format.match == Format::Match::Weak) {
+        // Weak matches never miss
+      } else if(format.type == Format::Type::Absolute) {
+        uint bits = bitLength(args[format.argument]);
+        if(!bits) {
+          // Bit length could not be determined. Assume it fits for now.
+        } else if(format.match == Format::Match::Strong) {
+          if(bits > opcode.number[format.argument].bits) {
+            mismatch = true;
+            break;
+          }
+        } else if(format.match == Format::Match::Exact) {
+          if(bits != opcode.number[format.argument].bits) {
+            mismatch = true;
+            break;
           }
         }
       }
