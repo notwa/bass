@@ -52,7 +52,7 @@ auto Table::assemble(const string& statement) -> bool {
     }
     if(mismatch) continue;
 
-    if(!hasUnknowns || self.queryPhase()) match = opcode;
+    match = opcode;
     break;
   }
 
@@ -62,6 +62,14 @@ auto Table::assemble(const string& statement) -> bool {
     tokenize(args, s, opcode.pattern);
 
     for(auto& format : opcode.format) {
+      auto evaluateArgument = [&] {
+        //Strip any prefix used for overriding bitLength.
+        string& argument = args[format.argument];
+        auto p = argument[0];
+        bool prefixed = p == '<' || p == '>' || p == '^' || p == '?' || p == ':';
+        return evaluate(prefixed ? argument.slice(1) : argument);
+      };
+
       switch(format.type) {
         case Format::Type::Static: {
           writeBits(format.data, format.bits);
@@ -69,13 +77,13 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::Absolute: {
-          uint data = evaluate(args[format.argument]);
+          uint data = evaluateArgument();
           writeBits(data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Relative: {
-          int data = evaluate(args[format.argument]) - (pc + format.displacement);
+          int data = evaluateArgument() - (pc + format.displacement);
           uint bits = opcode.number[format.argument].bits;
           int min = -(1 << (bits - 1)), max = +(1 << (bits - 1)) - 1;
           if(data < min || data > max) {
@@ -86,7 +94,7 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::Repeat: {
-          uint data = evaluate(args[format.argument]);
+          uint data = evaluateArgument();
           for(uint n : range(data)) {
             writeBits(format.data, opcode.number[format.argument].bits);
           }
@@ -94,19 +102,19 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::ShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = evaluateArgument();
           writeBits(data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::ShiftLeft: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = evaluateArgument();
           writeBits(data << format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::RelativeShiftRight: {
-          int data = evaluate(args[format.argument]) - (pc + format.displacement);
+          int data = evaluateArgument() - (pc + format.displacement);
           unsigned bits = opcode.number[format.argument].bits;
           int min = -(1 << (bits - 1)), max = +(1 << (bits - 1)) - 1;
           if(data < min || data > max) error("branch out of bounds");
@@ -121,49 +129,49 @@ auto Table::assemble(const string& statement) -> bool {
         }
 
         case Format::Type::Negative: {
-          unsigned data = evaluate(args[format.argument]);
+          unsigned data = evaluateArgument();
           writeBits(-data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::NegativeShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = evaluateArgument();
           writeBits(-data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Compliment: {
-          unsigned data = evaluate(args[format.argument]);
+          unsigned data = evaluateArgument();
           writeBits(~data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::ComplimentShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = evaluateArgument();
           writeBits(~data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Decrement: {
-          unsigned data = evaluate(args[format.argument]);
+          unsigned data = evaluateArgument();
           writeBits(--data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::DecrementShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = evaluateArgument();
           writeBits(--data >> format.data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::Increment: {
-          unsigned data = evaluate(args[format.argument]);
+          unsigned data = evaluateArgument();
           writeBits(++data, opcode.number[format.argument].bits);
           break;
         }
 
         case Format::Type::IncrementShiftRight: {
-          uint64_t data = evaluate(args[format.argument]);
+          uint64_t data = evaluateArgument();
           writeBits(++data >> format.data, opcode.number[format.argument].bits);
           break;
         }
@@ -252,11 +260,11 @@ auto Table::bitLength(string& text) -> uint {
   };
 
   char* p = text.get();
-  if(*p == '<') { *p = ' '; return  8; }
-  if(*p == '>') { *p = ' '; return 16; }
-  if(*p == '^') { *p = ' '; return 24; }
-  if(*p == '?') { *p = ' '; return 32; }
-  if(*p == ':') { *p = ' '; return 64; }
+  if(*p == '<') return  8;
+  if(*p == '>') return 16;
+  if(*p == '^') return 24;
+  if(*p == '?') return 32;
+  if(*p == ':') return 64;
 
   uint length = 0;
   if(*p == '%') length = binLength(p + 1);
@@ -271,12 +279,12 @@ auto Table::bitLength(string& text) -> uint {
   auto data = evaluate(text, Bass::Evaluation::Known | Bass::Evaluation::Undoable);
 
   if(self.unknowable != old) {
-    fprintf(stderr, "UNKNOWN within instruction! %s\n", text.data());
-    return 0;
+    //debug("UNKNOWN within instruction! ", text, "\n");
+    if(self.queryPhase()) return 0;
   }
 
   if(self.cantUndo) {
-    fprintf(stderr, "NO UNDO within instruction! %s\n", text.data());
+    debug("NO UNDO within instruction! ", text, "\n");
   }
 
   //return data ? (data > 0 ? floor(log2(data)) + 1 : 64) : 1;

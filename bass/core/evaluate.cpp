@@ -5,8 +5,8 @@ auto Bass::evaluate(const string& expression, uint mode) -> int64_t {
   if(expression == "+" ) name = {"nextLabel#", nextLabelCounter + 0};
   if(expression == "++") name = {"nextLabel#", nextLabelCounter + 1};
   if(name) {
-    if(auto constant = knownConstant({name()}, mode)) return constant().value;
-    if(!queryPhase()) error("relative label not declared");
+    if(auto constant = knownConstant(name(), mode)) return constant().value;
+    if(!queryPhase() && !refinePhase()) error("relative label not declared");
     if(mode & Evaluation::Known) unknowable++;
     markUnknown(name());
     return pc();
@@ -187,8 +187,14 @@ auto Bass::evaluateLiteral(Eval::Node* node, uint mode) -> int64_t {
 
   if(auto variable = knownVariable(s, mode)) return variable().value;
   if(auto constant = knownConstant(s, mode)) return constant().value;
+
+  if(mode & Evaluation::Known) unknowable++;
+
   if(!(mode & Evaluation::Strict) && queryPhase()) {
-    if(mode & Evaluation::Known) unknowable++;
+    markUnknown(s);
+    return pc();
+  }
+  if(refinePhase()) {
     markUnknown(s);
     return pc();
   }

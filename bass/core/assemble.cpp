@@ -47,7 +47,7 @@ auto Bass::assemble(const string& statement) -> bool {
     auto p = s.contains("=") ? s.trimLeft("constant ", 1L).split("=", 1L).strip() : s.trim("constant ", ")", 1L).split("(", 1L).strip();
     uint old = unknowable;
     auto& constant = setConstant(p(0), evaluate(p(1), Evaluation::Known));
-    if(unknowable != old) constant.indeterminate = true;
+    if(!writePhase() && unknowable != old) constant.indeterminate = true;
     return true;
   }
 
@@ -56,21 +56,21 @@ auto Bass::assemble(const string& statement) -> bool {
     s.trimRight(" {", 1L);
     s.trimRight(":", 1L);
     auto& constant = setConstant(s, pc());
-    constant.indeterminate = true;
+    if(!writePhase()) constant.indeterminate = true;
     return true;
   }
 
   //- or - {
   if(s.match("-") || s.match("- {")) {
     auto& constant = setConstant({"lastLabel#", lastLabelCounter++}, pc());
-    constant.indeterminate = true;
+    if(!writePhase()) constant.indeterminate = true;
     return true;
   }
 
   //+ or + {
   if(s.match("+") || s.match("+ {")) {
     auto& constant = setConstant({"nextLabel#", nextLabelCounter++}, pc());
-    constant.indeterminate = true;
+    if(!writePhase()) constant.indeterminate = true;
     return true;
   }
 

@@ -7,7 +7,7 @@ struct Bass {
   auto constant(const string& name, const string& value) -> void;
   auto assemble(bool strict = false) -> bool;
 
-  enum class Phase : uint { Analyze, Query, Write };
+  enum class Phase : uint { Analyze, Query, Refine, Write };
   enum class Endian : uint { LSB, MSB };
   //TODO: make this a proper, strict, enum-like class again! can't do that with flags.
   enum Evaluation : uint { Default = 0, Strict = 1, Undoable = 2, Known = 4 };  //strict mode disallows forward-declaration of constants
@@ -80,6 +80,7 @@ struct Bass {
     bool indeterminate = false; //(LHS) true when its definition is based on a placeholder value
     bool unknown = false; //(RHS) true when it was substituted with a placeholder value
     bool held = true; //constant can be overwritten once when false
+    bool changed = true; //constant was assigned a different value than previous phase
   };
 
   struct Array {
@@ -144,6 +145,7 @@ struct Bass {
 
   auto analyzePhase() const -> bool { return phase == Phase::Analyze; }
   auto queryPhase() const -> bool { return phase == Phase::Query; }
+  auto refinePhase() const -> bool { return phase == Phase::Refine; }
   auto writePhase() const -> bool { return phase == Phase::Write; }
 
   //core.cpp

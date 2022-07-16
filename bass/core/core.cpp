@@ -79,18 +79,70 @@ auto Bass::assemble(bool strict) -> bool {
 
   try {
     phase = Phase::Analyze;
+    debug("============================== BEGINNING PASS 0 ==============================\n");
     analyze();
 
     phase = Phase::Query;
     architecture = new Architecture{*this};
+    debug("============================== BEGINNING PASS 1 ==============================\n");
     execute();
-    for(auto s : orderedUnknowns) fprintf(stderr, "Unk(Q): %s\n", s.data());
 
+    for(auto s : orderedUnknowns) debug("Unk(Q): ", s, "\n");
 
+    uint passes = 2;
+    if(orderedUnknowns.size()) for(; passes <= 10; passes++) {
+      orderedUnknowns.reset();
+
+      debug("\n");
+      debug("------------------------------ PREPARING PASS ", passes, " ------------------------------\n");
+      debug("investigating constants...\n");
+
+      bool anyDiscovered = false;
+      bool anyChanged = false;
+      for(auto& constant : constants) {
+        auto name = constant.name;
+
+        if(!constant.held) {
+          debug("never set!: ", name, "\n");
+          constants.remove(name);
+
+        } else if(constant.indeterminate) {
+          if(constant.unknown) debug("fwdlabel: ", name, "\n");
+          debug("unmarking as indeterminate: ", name, "\n");
+          constant.indeterminate = false;
+          constant.held = false;
+
+        } else if(constant.unknown) {
+          debug("DISCOVERED: ", name, "\n");
+          constant.unknown = false;
+          anyDiscovered = true;
+        }
+
+        if(constant.changed) anyChanged = true;
+        constant.changed = false;
+      }
+
+      if(!anyChanged) {
+        debug("breaking...\n");
+        for(auto& constant : constants) {
+          constant.indeterminate = false;
+          constant.unknown = false;
+          constant.held = true;
+        }
+        break;
+      }
+
+      debug("============================== BEGINNING PASS ", passes, " ==============================\n");
+      if(anyDiscovered) debug("doing rediscovery pass\n");
+      phase = Phase::Refine;
+      architecture = new Architecture{*this};
+      execute();
+    }
+
+    debug("============================ BEGINNING FINAL PASS ============================\n");
     phase = Phase::Write;
     architecture = new Architecture{*this};
     execute();
-    for(auto s : orderedUnknowns) fprintf(stderr, "Unk(W): %s\n", s.data());
   } catch(...) {
     return false;
   }

@@ -175,12 +175,31 @@ auto Bass::setConstant(const string& name, int64_t value) -> Constant& {
   if(!validate(name)) error("invalid constant identifier: ", name);
   string scopedName = {scope.merge("."), scope ? "." : "", name};
 
-  if(auto constant = constants.find({scopedName})) {
-    if(!constant().held) {
-      if(writePhase()) error("unheld constant in writePhase!");
-      constant().held = true;
-    } else if(queryPhase()) {
-      error("constant cannot be modified: ", scopedName);
+  if(auto constant = constants.find(scopedName)) {
+    bool changing = constant().value != value;
+
+    if(queryPhase()) {
+      if(constant().held) error("constant cannot be modified: ", scopedName);
+      else constant().held = true;
+
+    } else if(refinePhase()) {
+      bool discovery = !constant().indeterminate && !constant().unknown;
+      if(changing) {
+        if(discovery && constant().held) {
+          error("seemingly-known constant changed between phases: ", scopedName);
+        }
+        debug("constant \"", constant().name, "\" changing from ", constant().value, " to ", value, "\n");
+        constant().changed = true;
+      } else { // not changing
+        if(discovery) constant().held = false; // just to dodge the error
+      }
+
+      if(constant().held) error("constant is being held: ", scopedName);
+      else constant().held = true;
+
+    } else if(writePhase()) {
+      if(!constant().held) error("unheld constant in writePhase: ", scopedName);
+
     }
 
     constant().value = value;
@@ -192,21 +211,31 @@ auto Bass::setConstant(const string& name, int64_t value) -> Constant& {
 
 auto Bass::markUnknown(const string& name) -> bool {
   if(!validate(name)) error("invalid constant identifier: ", name);
-  string scopedName = {scope.merge("."), scope ? "." : "", name};
+  //string scopedName = {scope.merge("."), scope ? "." : "", name};
 
-  fprintf(stderr, "unknowing %s at line %u\n", scopedName.data(), activeInstruction->lineNumber);
+  bool anyExisting = false;
+  auto s = scope;
+  while(true) {
+    string scopedName = {s.merge("."), s ? "." : "", name};
 
-  if(auto constant = constants.find({scopedName})) {
-    if(!constant().unknown) orderedUnknowns.append(scopedName);
-    constant().unknown = true;
-    return true;
-  } else {
-    auto newConstant = constants.insert({scopedName, pc()});
-    orderedUnknowns.append(scopedName);
-    newConstant().unknown = true;
-    newConstant().held = false;
-    return false;
+    debug("unknowing ", scopedName, " at line ", activeInstruction->lineNumber, "\n");
+
+    if(auto constant = constants.find(scopedName)) {
+      if(!constant().unknown) orderedUnknowns.append(scopedName);
+      constant().unknown = true;
+      anyExisting = true;
+    } else {
+      auto newConstant = constants.insert({scopedName, pc()});
+      orderedUnknowns.append(scopedName);
+      newConstant().unknown = true;
+      newConstant().held = false;
+    }
+
+    if(!s) break;
+    s.removeRight();
   }
+
+  return anyExisting;
 }
 
 auto Bass::findConstant(const string& name) -> maybe<Constant&> {
@@ -228,8 +257,8 @@ auto Bass::knownConstant(const string& name, uint mode) -> maybe<Constant&> {
     if(writePhase() && constant().indeterminate) error("indeterminate constant: ", constant().name);
     //name might differ from the one passed by argument due to scoping
     if(mode & Evaluation::Known && constant().unknown) unknowable++;
-    //hack to prevent branches from erroring too early:
-    if(constant().unknown && !constant().held) constant().value = pc();
+    //FIXME: hack to prevent branches from erroring too early:
+    if(constant().unknown && !constant().held && queryPhase()) constant().value = pc();
     return constant;
   }
   return nothing;
