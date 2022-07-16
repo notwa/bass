@@ -168,7 +168,7 @@ auto Table::assemble(const string& statement) -> bool {
   return false;
 }
 
-auto Table::bitLength(const string& text) const -> uint {
+auto Table::bitLength(const string& text) -> uint {
   auto countBits = [&](uint64_t data) {
     uint bits = 0;
     while(data) { data >>= 1; bits++; }
@@ -226,9 +226,7 @@ auto Table::bitLength(const string& text) const -> uint {
   if(*p >= '0' && *p <= '9') length = decLength(p);
   if(length) return length;
 
-  int64_t data = 0;
-  if(auto constant = self.findConstant(p)) data = constant().value;
-  if(auto variable = self.findVariable(p)) data = variable().value;
+  int64_t data = evaluate(p);
   return data >= 0 ? countBits(data) : 64;
 }
 
