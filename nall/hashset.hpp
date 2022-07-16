@@ -165,6 +165,46 @@ struct hashset {
     return false;
   }
 
+  struct base_iterator {
+    auto operator!=(const base_iterator& source) const -> bool { return position != source.position; }
+
+    auto operator++() -> base_iterator& {
+      if(++position >= size) { position = size; return *this; }
+      queue.takeFirst();
+      return *this;
+    }
+
+    base_iterator(const hashset& source, uint position) : source(source), position(position) {
+      //queue = source.entries();
+      if(source.pool && source.count) {
+        queue.reserve(source.count);
+        for(uint n : range(source.length)) if(source.pool[n]) queue.append(source.pool[n]);
+      }
+      size = queue.size();
+    }
+
+  protected:
+    const hashset& source;
+    uint position, size;
+    vector<entry_t> queue;
+  };
+
+  struct iterator : base_iterator {
+    iterator(const hashset& source, uint position) : base_iterator(source, position) {}
+    auto operator*() const -> T& { return *base_iterator::queue.first().ptr; }
+  };
+
+  auto begin() -> iterator { return iterator(*this, 0); }
+  auto end() -> iterator { return iterator(*this, size()); }
+
+  struct const_iterator : base_iterator {
+    const_iterator(const hashset& source, uint position) : base_iterator(source, position) {}
+    auto operator*() const -> const T& { return *base_iterator::queue.first().ptr; }
+  };
+
+  auto begin() const -> const const_iterator { return const_iterator(*this, 0); }
+  auto end() const -> const const_iterator { return const_iterator(*this, size()); }
+
   auto inline mask(const uint n) /*const*/ -> const uint {
     return n & (length - 1);
   }
