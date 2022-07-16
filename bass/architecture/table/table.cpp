@@ -156,6 +156,12 @@ auto Table::assemble(const string& statement) -> bool {
 }
 
 auto Table::bitLength(string& text) const -> uint {
+  auto countBits = [&](uint64_t data) {
+    uint bits = 0;
+    while(data) { data >>= 1; bits++; }
+    return bits ? bits : 1;
+  };
+
   auto binLength = [&](const char* p) -> uint {
     uint length = 0;
     while(*p) {
@@ -176,21 +182,41 @@ auto Table::bitLength(string& text) const -> uint {
     return length;
   };
 
+  auto decLength = [&](const char* p) -> uint {
+    int length;
+    for(length = 0; ; length++) {
+      char c = p[length];
+      if(c == '\0') break;
+      if(c < '0' || c > '9') return 0;
+    }
+    if(length == 0) return 0;
+    if(length >= 21) return 65;
+
+    uint64_t i = toInteger(p);
+    if(length == 20 && i < (1ull << 63)) return 65; // Detect overflow
+    return countBits(toInteger(p));
+  };
+
   char* p = text.get();
   if(*p == '<') { *p = ' '; return  8; }
   if(*p == '>') { *p = ' '; return 16; }
   if(*p == '^') { *p = ' '; return 24; }
   if(*p == '?') { *p = ' '; return 32; }
   if(*p == ':') { *p = ' '; return 64; }
-  if(*p == '%') return binLength(p + 1);
-  if(*p == '$') return hexLength(p + 1);
-  if(*p == '0' && *(p + 1) == 'b') return binLength(p + 2);
-  if(*p == '0' && *(p + 1) == 'x') return hexLength(p + 2);
-  if(*p >= '0' && *p <= '9') return floor(log2(atoi(p))) + 1;
   if(*p == '-') return 64;
-  if(auto constant = self.findConstant(p)) return (constant().value >= 0) ? floor(log2(constant().value)) + 1 : 64;
-  if(auto variable = self.findVariable(p)) return (variable().value >= 0) ? floor(log2(variable().value)) + 1 : 64;
-  return 0;
+
+  uint length = 0;
+  if(*p == '%') length = binLength(p + 1);
+  if(*p == '$') length = hexLength(p + 1);
+  if(*p == '0' && *(p + 1) == 'b') length = binLength(p + 2);
+  if(*p == '0' && *(p + 1) == 'x') length = hexLength(p + 2);
+  if(*p >= '0' && *p <= '9') length = decLength(p);
+  if(length) return length;
+
+  int64_t data = 0;
+  if(auto constant = self.findConstant(p)) data = constant().value;
+  if(auto variable = self.findVariable(p)) data = variable().value;
+  return data >= 0 ? countBits(data) : 64;
 }
 
 auto Table::writeBits(uint64_t data, uint length) -> void {
