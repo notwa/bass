@@ -103,7 +103,7 @@ auto Table::assemble(const string& statement) -> bool {
           int min = -(1 << (bits - 1)), max = +(1 << (bits - 1)) - 1;
           if(data < min || data > max) error("branch out of bounds");
           bits -= format.data;
-          if (endian() == Bass::Endian::LSB) {
+          if(endian() == Bass::Endian::LSB) {
             writeBits(data >> format.data, bits);
           } else {
             data >>= format.data;
@@ -243,7 +243,7 @@ auto Table::writeBits(uint64_t data, uint length) -> void {
     write(bitval);
     bitval >>= 8;
     bitpos -= 8;
-  }  
+  }
 }
 
 auto Table::parseTable(const string& text) -> bool {
@@ -282,7 +282,7 @@ auto Table::parseTable(const string& text) -> bool {
 auto Table::parseDirective(string& line) -> void {
   auto work = line.strip();
   work.trimLeft("#directive ", 1L);
-  
+
   auto items = work.split(" ");
   if(items.size() != 2) {
     error("Wrong syntax: '",line , "'\n");
@@ -290,16 +290,16 @@ auto Table::parseDirective(string& line) -> void {
 
   auto& key = items[0];
   key.append(" ");
-  
+
   uint value = atoi(items[1]);
-  
+
   for(auto& d : directives().EmitBytes) {
     if(key.equals(d.token)) {
       d.dataLength = value;
       return;
     }
   }
-  
+
   directives().add(key, value);
 }
 
