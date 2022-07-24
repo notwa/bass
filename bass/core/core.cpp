@@ -97,14 +97,15 @@ auto Bass::assemble(bool strict) -> bool {
       debug("------------------------------ PREPARING PASS ", passes, " ------------------------------\n");
       debug("investigating constants...\n");
 
-      bool anyDiscovered = false;
       bool anyChanged = false;
+      bool anyUnset = false;
       for(auto& constant : constants) {
         auto name = constant.name;
 
         if(!constant.held) {
           debug("never set!: ", name, "\n");
           constants.remove(name);
+          anyUnset = true;
 
         } else if(constant.indeterminate) {
           if(constant.unknown) debug("fwdlabel: ", name, "\n");
@@ -115,14 +116,18 @@ auto Bass::assemble(bool strict) -> bool {
         } else if(constant.unknown) {
           debug("DISCOVERED: ", name, "\n");
           constant.unknown = false;
-          anyDiscovered = true;
         }
 
-        if(constant.changed) anyChanged = true;
+        if(constant.changed && constant.held) anyChanged = true;
         constant.changed = false;
       }
 
       if(!anyChanged) {
+        if(anyUnset) {
+          debug("failed to determine a constant, breaking...\n");
+          break;
+        }
+
         debug("breaking...\n");
         for(auto& constant : constants) {
           constant.indeterminate = false;
@@ -133,7 +138,6 @@ auto Bass::assemble(bool strict) -> bool {
       }
 
       debug("============================== BEGINNING PASS ", passes, " ==============================\n");
-      if(anyDiscovered) debug("doing rediscovery pass\n");
       phase = Phase::Refine;
       architecture = new Architecture{*this};
       execute();
